@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - Điểm danh lớp học</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 70px;
+            height: 100vh;
+            background-color: #223E8D;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 10px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .sidebar img {
+            width: 40px;
+            height: 40px;
+            margin: 20px 0;
+            border-radius: 50%;
+            background: white;
+            padding: 5px;
+            object-fit: contain;
+        }
+
+        .sidebar-separator {
+            width: 80%;
+            height: 1px;
+            background-color: white;
+            margin: 10px 0;
+        }
+
+        .main-content {
+            margin-left: 70px;
+            padding: 20px;
+            flex: 1;
+        }
+
+        .section-divider {
+            width: 100%;
+            height: 1px;
+            background-color: #ccc;
+            margin: 10px 0 30px 0;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 0 20px;
+        }
+
+        .class-card {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .class-card:hover {
+            transform: scale(1.02);
+        }
+
+        .class-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .class-id {
+            color: #666;
+            font-size: 14px;
+        }
+
+        #detail {
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            margin: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+
+        #videoWrapper {
+            margin-top: 20px;
+        }
+
+        #resultImg {
+            margin-top: 10px;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <img src="/static/logo.png" alt="Logo" />
+        <div class="sidebar-separator"></div>
+        <img src="/static/user.png" alt="User" />
+        <img src="/static/dashboard.png" alt="Dashboard" />
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <h1 style="text-align:center; padding-top: 20px;">Dashboard - Lớp học</h1>
+        <div class="section-divider"></div>
+
+        <div class="dashboard" id="classList">
+            <!-- Thẻ lớp sẽ được render bằng JS -->
+        </div>
+
+        <div id="detail">
+            <h2 id="classNameTitle"></h2>
+            <table id="studentTable">
+                <thead><tr id="tableHeader"></tr></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+            <button onclick="startAttendance()">Điểm danh tự động</button>
+            <div id="videoWrapper" style="display:none">
+                <video id="video" autoplay width="400"></video><br>
+                <img id="resultImg"/>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const classes = [
+            {name: "Thực hành phát triển hệ thống Trí Tuệ Nhân Tạo", id: "2425H_AIT3004_60"},
+        ];
+
+        const classListDiv = document.getElementById("classList");
+
+        classes.forEach(cls => {
+            const div = document.createElement("div");
+            div.className = "class-card";
+            div.innerHTML = `<div class="class-title">${cls.name}</div><div class="class-id">${cls.id}</div>`;
+            div.onclick = () => loadClass(cls.id, cls.name);
+            classListDiv.appendChild(div);
+        });
+
+        function loadClass(classId, className) {
+            fetch("/select_class", {
+                method: "POST",
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `class_name=${classId}`
+            }).then(res => res.text()).then(html => {
+                fetch(`/get_class_data?class_name=${classId}`)
+                .then(res => res.json()).then(data => {
+                    document.getElementById("detail").style.display = "block";
+                    document.getElementById("classNameTitle").innerText = className;
+
+                    const headerRow = document.getElementById("tableHeader");
+                    headerRow.innerHTML = "";
+                    data.headers.forEach(h => {
+                        const th = document.createElement("th");
+                        th.innerText = h;
+                        headerRow.appendChild(th);
+                    });
+
+                    const body = document.getElementById("tableBody");
+                    body.innerHTML = "";
+                    data.students.forEach(row => {
+                        const tr = document.createElement("tr");
+                        data.headers.forEach(h => {
+                            const td = document.createElement("td");
+                            td.innerText = row[h];
+                            tr.appendChild(td);
+                        });
+                        body.appendChild(tr);
+                    });
+                });
+            });
+        }
+
+        function startAttendance() {
+            document.getElementById("videoWrapper").style.display = "block";
+            const video = document.getElementById("video");
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+
+            navigator.mediaDevices.getUserMedia({video: true}).then(stream => {
+                video.srcObject = stream;
+                setInterval(() => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const dataURL = canvas.toDataURL("image/jpeg");
+                    fetch("/process_frame", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({ image: dataURL })
+                    }).then(res => res.json()).then(data => {
+                        document.getElementById("resultImg").src = data.image;
+                    });
+                }, 3000);
+            });
+        }
+    </script>
+</body>
+</html>
